@@ -1,21 +1,24 @@
 #include "voices.h"
 
 volatile EnvParams_t g_env_params;
+MidiRingBuffer_t g_midi_rb;
 
-//decoding increments from pot levels
-EnvParams_t pot_decode (uint16t a, uint16t d, uint16t s, uint16t r) {
-    //args are pot levels from 0-4095
-} 
-
-//potentiometer isr
-EnvParams_t pot_isr () {
-
-    //decode levels into increments
-    //pot_decode
+MidiNote_t dq_midi_rb (MidiRingBuffer_t *g_midi_rb) {
+    MidiNote_t event = fifo[g_midi_rb->tail];
+    g_midi_rb->tail++;
+    return event;
 }
 
+int eq_midi_rb (MidiRingBuffer_t *g_midi_rb, MidiNote_t new_note;) {
+    //overwrites oldest byte in case of overflow
+    g_midi_rb->head++;
+    int overflow = ((g_midi_rb->head) == g_midi_rb->tail);
+    g_midi_rb->fifo[g_midi_rb->head] = new_note;
+    return overflow;
+}
 
 //button press cycles through wavetables
 void cycle_wavetable() {
     //increment through pointer array of wavetables, should wrap around at end
 }
+

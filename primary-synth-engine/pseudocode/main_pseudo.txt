@@ -1,1 +1,24 @@
 
+
+main START
+    init everything
+
+    INF_LOOP
+        
+    ENDINF_LOOP
+
+
+END
+
+voicestealing START
+    IF midiringbuffer.empty == false THEN
+        raw_midi = midiringbuffer.dequeue
+        decoded_midi = decode_midi(raw_midi)
+        FOR all g_voices
+        //handle note_off events
+            IF 
+        //handle note+on events
+
+        ENDFOR
+
+END
