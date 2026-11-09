@@ -1,4 +1,4 @@
 
 //*************************************************
-#define AKWF_WAVETABLE_SIZE = 600;
+#define AKWF_WAVETABLE_SIZE 256
 
