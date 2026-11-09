@@ -1,0 +1,7 @@
+so far ive written and tested the delay effect, PWM audio code compiles but 
+i need to physically test it
+
+im working on implementing the PIO/I2S receiver and DMA buffering rn and
+planning to add more audio effects and controls
+
+im also waiting to confirm the I2S sample rate bit depth and format
