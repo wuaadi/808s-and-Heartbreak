@@ -106,7 +106,7 @@ void press_voice (Voice_t *voice, uint32_t phase_inc, uint8_t velocity) {
 }
 void release_voice (Voice_t *voice) {
     voice->env_idx = 0;
-    voice->env_amp_latch = voice->amp;
+    voice->env_amp_latch = voice->env_level;
     voice->env_state = ENV_STATE_RELEASE;
 
     voice->pressed = false;

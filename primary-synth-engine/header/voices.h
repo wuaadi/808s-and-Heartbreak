@@ -59,7 +59,6 @@ typedef struct {
   uint8_t velocity; //velocity of the note
 
   //envelope parameters
-  uint16_t *env_table; //pointer to envelope table
   volatile uint16_t env_idx; //envelope index
   uint8_t a_inc, d_inc, r_inc; //attack, decay, release increments
   uint32_t s_level; //sustain level

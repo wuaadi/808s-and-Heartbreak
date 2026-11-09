@@ -3,17 +3,18 @@
 volatile EnvParams_t g_env_params;
 MidiRingBuffer_t g_midi_rb;
 
-MidiNote_t dq_midi_rb (MidiRingBuffer_t *g_midi_rb) {
-    MidiNote_t event = fifo[g_midi_rb->tail];
-    g_midi_rb->tail++;
+MidiNote_t dq_midi_rb (MidiRingBuffer_t *rb) {
+    MidiNote_t event = rb->fifo[rb->tail];
+    rb->tail++;
     return event;
 }
 
-int eq_midi_rb (MidiRingBuffer_t *g_midi_rb, MidiNote_t new_note;) {
+int eq_midi_rb (MidiRingBuffer_t *rb, MidiNote_t new_note) {
     //overwrites oldest byte in case of overflow
-    g_midi_rb->head++;
-    int overflow = ((g_midi_rb->head) == g_midi_rb->tail);
-    g_midi_rb->fifo[g_midi_rb->head] = new_note;
+    rb->head++;
+    int overflow = ((rb->head) == rb->tail);
+    if (overflow) rb->tail++;
+    rb->fifo[rb->head] = new_note;
     return overflow;
 }
 
