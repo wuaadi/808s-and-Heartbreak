@@ -2,8 +2,11 @@
 #include <stdlib.h>
 #include "osc.h"
 #include "midi.h"
+#include "gpio.h"
 
 uint32_t midi_to_phase_inc[128];
+
+static repeating_timer_t button_timer;
 
 int main (void) {
     //initialize DMA
@@ -13,6 +16,7 @@ int main (void) {
     //initialize oscillators
     //initialize envelope
     init_midi_phase_table(&midi_to_phase_inc);
+    add_repeating_timer_ms(-2, button_timer_cb, NULL, &button_timer);
 
     for ( ; ; ) {
         //voice allocation

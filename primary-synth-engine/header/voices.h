@@ -1,6 +1,9 @@
+#ifndef VOICES_H
+#define VOICES_H
+
 #include <stdio.h>
 #include <string.h>
-#include <math.c>
+#include <math.h>
 #include "pico/stdlib.h"
 
 //**************************************************
@@ -90,3 +93,4 @@ typedef struct {
 
 extern volatile EnvParams_t g_env_params;
 
+#endif
