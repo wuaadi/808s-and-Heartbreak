@@ -1,5 +1,6 @@
-#include <stdio.h>
 
+#include <stdio.h>
+#include <stdlib.h>
 typedef enum {
     //fill in with AKWF-FREE wavetable names
 
