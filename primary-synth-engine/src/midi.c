@@ -1,7 +1,10 @@
 #include "voices.h"
+#include "hardware/gpio.h"
+#include "pico/stdlib.h"
 
 volatile EnvParams_t g_env_params;
 MidiRingBuffer_t g_midi_rb;
+MidiFSMState_t g_midi_fsm;
 
 MidiNote_t dq_midi_rb (MidiRingBuffer_t *rb) {
     MidiNote_t event = rb->fifo[rb->tail];
@@ -60,3 +63,35 @@ static bool button_timer_cb(repeating_timer_t *rt) {
     cycle_wavetable();
     return true;   // true = keep repeating
 }
+
+void midi_uart_init () {
+    gpio_set_function(MCU1_MIDI_RX_PIN, UART_FUNCSEL_NUM(MCU1_MIDI_UART, MCU1_MIDI_RX_PIN));
+    
+    uart_init(MCU1_MIDI_UART, MCU1_MIDI_BAUD);
+    uart_set_format (MCU1_MIDI_UART, 8, 1, 0);
+    //set up isr_midi as handler
+
+}
+
+
+void ISR_midi () {
+    //acknowledge interrupt
+    
+    //read byte from uart
+    if (!uart_is_readable(MCU1_MIDI_UART))
+        return;
+    uint8_t byte = uart_getc(MCU1_MIDI_UART);
+    //feed into state machine
+    if (byte & 0x80) {
+        //if MSB != 0, is status byte
+
+        if (byte == MIDI_NOTE_ON || byte == MIDI_NOTE_OFF)
+            midi_event_last = byte;
+    }
+    else {
+        //channel bytes, ignore any byte not within 0 - 127
+        
+    }
+
+}
+

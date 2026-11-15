@@ -39,8 +39,10 @@ void voice_init(Voice_t *voice) {
   voice->r_inc = 0;
   voice->s_level = 0;
   voice->env_state = ENV_STATE_OFF;
+  voice->env_requests = ENV_REQUEST_NONE;
 
   voice->env_amp_latch = 0;
+  voice->env_base_level = 0;
   voice->env_level = 0;
 
   voice->age = 0;
@@ -58,7 +60,19 @@ void ISR_envelope(void) {
   for (int i = 0; i < NUM_VOICES; i++) {
     Voice_t *v = &g_voices[i];
     uint32_t level = 0;
-    //handles a->d->s->r transitions, voice allocator handles special cases
+    uint8_t requests = v->env_requests;
+    v->env_requests = ENV_REQUEST_NONE;
+
+    if (requests & ENV_REQUEST_ATTACK) {
+      v->env_idx = 0;
+      v->env_base_level = 0;
+      v->env_state = ENV_STATE_ATTACK;
+    }
+    if (requests & ENV_REQUEST_RELEASE) {
+      v->env_idx = 0;
+      v->env_amp_latch = v->env_base_level;
+      v->env_state = ENV_STATE_RELEASE;
+    }
 
     switch (v->env_state) {
       case ENV_STATE_OFF:
@@ -95,6 +109,7 @@ void ISR_envelope(void) {
         break;
     }
 
+    v->env_base_level = (uint16_t)level;
     v->env_level = (level * v->velocity) >> 7;
     // >> 7 same as /128, scaling by max velocity value
   }

@@ -4,6 +4,8 @@
 #include "midi.h"
 #include "gpio.h"
 
+int16_t g_audio_buffer
+
 uint32_t midi_to_phase_inc[128];
 
 static repeating_timer_t button_timer;
@@ -114,4 +116,10 @@ void release_voice (Voice_t *voice) {
     voice->env_state = ENV_STATE_RELEASE;
 
     voice->pressed = false;
+}
+
+void init_set_priorities {
+    irq_set_priority(OSCILLATOR_IRQ, 0x00); // highest of these
+    irq_set_priority(ENVELOPE_IRQ,   0x40);
+    irq_set_priority(UART0_IRQ,     0xC0); // MIDI: lower priority
 }

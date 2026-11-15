@@ -22,14 +22,19 @@ typedef struct {
   MidiByte_t number;
 } MidiNote_t;
 
+extern volatile MidiByte_t midi_event_last
+
 typedef enum {
     MIDI_STATE_WAIT_FOR_STATUS,
     MIDI_STATE_WAIT_FOR_DATA1,
     MIDI_STATE_WAIT_FOR_DATA2,
-    MIDI_STATE_WAIT_FOR_SYSEX,
-    MIDI_STATE_RUNNING_STATUS,
+    MIDI_STATE_WAIT_FOR_SYSEX, //unused
+    MIDI_STATE_RUNNING_STATUS, //unused
     MIDI_STATE_ERROR,
 } MidiFSMState_t;
+
+extern MidiFSMState_t g_midi_fsm;
+
 
 typedef struct{
   volatile MidiNote_t fifo[MIDI_RINGBUFFER_SIZE];
@@ -50,6 +55,12 @@ typedef enum {
   ENV_STATE_RELEASE
 } EnvState_t;
 
+enum {
+  ENV_REQUEST_NONE = 0,
+  ENV_REQUEST_ATTACK = 1u << 0,
+  ENV_REQUEST_RELEASE = 1u << 1
+};
+
 
 
 //*************************************************
@@ -66,9 +77,11 @@ typedef struct {
   uint8_t a_inc, d_inc, r_inc; //attack, decay, release increments
   uint32_t s_level; //sustain level
   volatile EnvState_t env_state;
+  volatile uint8_t env_requests; // consumed by the envelope ISR on the same core
 
   //audio/additonal env params
   volatile uint16_t env_amp_latch; //latch for envelope amplitude, used for release state
+  uint16_t env_base_level; // envelope level before velocity scaling
   volatile uint16_t env_level; // final output of a voice, amplitude after envelope applied to oscillator output
 
   //voice allocation
