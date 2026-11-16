@@ -1,7 +1,9 @@
 so far ive written and tested the delay effect, PWM audio code compiles but 
-i need to physically test it
+i need to physically test it, wrote the PIO/I2S receiver code
 
-im working on implementing the PIO/I2S receiver and DMA buffering rn and
-planning to add more audio effects and controls
+im working on DMA buffering rn and planning to add more audio effects and controls
 
-im also waiting to confirm the I2S sample rate bit depth and format
+im also waiting to confirm the I2S sample rate bit depth and format, clock config
+
+16 times sample rate regardless
+sin 16 bit format half word

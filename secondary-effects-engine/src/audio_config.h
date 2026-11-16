@@ -4,7 +4,7 @@
 // Audio config
 
 // !!! confirm sample rate with Aadi
-#define SAMPLE_RATE 24000
+#define SAMPLE_RATE 40000
 #define AUDIO_PWM_PIN 22
 #define PWM_CARRIER_HZ 240000
 #define TEST_FREQUENCY 440

@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#include "hardware/gpio.h"
+#include "pico/stdlib.h"
 #include "hardware/pwm.h"
 #include "hardware/clocks.h"
 #include "hardware/irq.h"

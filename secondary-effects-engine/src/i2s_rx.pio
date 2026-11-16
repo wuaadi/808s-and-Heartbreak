@@ -1,0 +1,32 @@
+.program i2s_rx
+
+; !!! confirm I2S format with Aadi
+; GP29 = BCLK
+; GP30 = LRCLK
+; GP31 = DATA
+; primary generates clocks
+; secondary receives data
+
+.wrap_target
+
+; synch with left channel
+wait 1 gpio 30
+wait 0 gpio 30
+
+; skip one-bit I2S offset
+wait 1 gpio 29
+wait 0 gpio 29
+
+; receive 16 audio bits
+set x, 15
+
+bitloop:
+    wait 1 gpio 29
+    in pins, 1
+    wait 0 gpio 29
+    jmp x-- bitloop
+
+; push completed sample to RX FIFO
+push block
+
+.wrap
