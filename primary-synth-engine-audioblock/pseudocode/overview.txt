@@ -95,7 +95,7 @@ Do i need two DMA buffers, or can I rely on the audio buffer FSM + 2 audio buffe
         upon button press, increment wavetable mode FSM
         set wavetable pointer for all voices (independent of envelope stage)
         use digital debouncing
-    handled by: event-triggered ISR
+    handled by: timer to run slowly (e.g. every 2 ms)
 
 //************************************************
 ISR PRIORITY LEVELS (lower==more important, higher, less)
@@ -107,3 +107,32 @@ ISR PRIORITY LEVELS (lower==more important, higher, less)
 //not included in ISR
 voice allocation runs in main()
 I2S runs in background, handled by DMA independent of CPU
+
+//what's good:
+block generatin + DMA svaes up a lot of CPU overhead
+ping-pong audio buffer standard & good
+voice allocation should stay in main()
+ring buffer between MIDI and ISR
+priorty ordering good
+flash tables
+
+//revisions to make: 
+I2S, not sysclk, is clock master (using sysclk could create drift)
+drive block generation from DMA completion 
+    (Use the DMA channel's completion IRQ (dma_channel_set_irq0_enabled) as the trigger)
+use 48KHz as sample rate if possible
+
+rendering audio block inside ISR could starve other interrupts
+    options:
+        1. set waveform isr priority < midi priority
+        2. run it inside main
+            DMA sets a completion flag, main handles block generation if its high, then moves onto voice allocation
+account for stereo frame I2S standard
+    e.g. duplicate each mono frame
+branching in waveform generation potentially slows things down
+    consider using 1 envelope update per 64-sample block
+Add startup: init both audio buffers to zero before enabling PIO & DMA
+
+for audio waveform generation, do per-voice, per block, instead of per-sample per voice
+    for each voice, generate its portion of the block completly
+    sum and scale at the end once
