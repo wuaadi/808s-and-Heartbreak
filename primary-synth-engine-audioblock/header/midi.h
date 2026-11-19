@@ -29,10 +29,6 @@ const uint8_t MIDI_PITCH_BEND = 0xE0 | (MIDI_CHANNEL & 0xF);
 
 volatile MidiByte_t midi_event_last;
 
-//midi note struct
-typedef struct {
-    uint32_t
-} MidiPhaseIncTable_t;
 
 //functions
 void midi_uart_init ();

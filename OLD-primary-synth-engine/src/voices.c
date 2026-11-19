@@ -4,7 +4,7 @@
 int16_t g_audio; //final audio waveform to be sent to DMA
 
 void init_oscillator() {
-    //initalizes oscillator interrupts
+    //oscillator interrupt uses PW
 }
 
 
