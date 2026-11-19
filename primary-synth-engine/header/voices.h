@@ -5,24 +5,18 @@
 #include <string.h>
 #include <math.h>
 #include "pico/stdlib.h"
+#include <stdbool.h>
+#include <stddef.h>
 
 //**************************************************
 //MIDI
 #define MIDI_RINGBUFFER_SIZE 256
-#define ENV_WAVETABLE_SIZE 256
 #define MIDI_UART_BAUD_RATE 31250
-const uint32_t SAMPLE_RATE=  pow(2, 15); //32,768g
+#define SAMPLE_RATE 32768u
 #define NUM_VOICES 16 //size of voice array
 
-typedef uint8_t MidiByte_t;
 
-typedef struct {
-  MidiByte_t event;
-  MidiByte_t velocity;
-  MidiByte_t number;
-} MidiNote_t;
 
-extern volatile MidiByte_t midi_event_last
 
 typedef enum {
     MIDI_STATE_WAIT_FOR_STATUS,
@@ -67,7 +61,7 @@ enum {
 //Voice Allocation
 typedef struct {
   /*oscillator parameters */
-  uint16_t *osc_table; //pointer to wavetable
+  const uint16_t *osc_table; //pointer to wavetable
   volatile uint32_t phase_acc; //phase accumulator
   volatile uint32_t phase_inc; //phase increment
   uint8_t velocity; //velocity of the note
@@ -93,7 +87,7 @@ typedef struct {
 
 //*************************************************
 //Oscillator
-extern uint16_t g_audio; //final audio waveform to be sent to DMA
+extern int16_t g_audio; //final audio waveform to be sent to DMA
 extern Voice_t g_voices[NUM_VOICES];
 //*************************************************
 //Potentiometers

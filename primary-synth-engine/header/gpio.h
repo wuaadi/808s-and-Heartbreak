@@ -26,7 +26,7 @@
 #define MCU1_RELEASE_POT_PIN    43  // ADC3
 #define MCU1_RELEASE_POT_ADC    3
 
-// ---- Left Side: MIDI Input (UART0) ----------------------------------
+// ---- Left Side: MIDI Input (UART1) ----------------------------------
 #define MCU1_MIDI_UART          uart1
 #define MCU1_MIDI_RX_PIN        5   // From optocoupler output
 #define MCU1_MIDI_BAUD          31250

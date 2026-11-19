@@ -10,13 +10,21 @@ uint32_t midi_to_phase_inc[128];
 
 static repeating_timer_t button_timer;
 
+static bool button_timer_cb(repeating_timer_t *rt) {
+    (void)rt;
+    cycle_wavetable();
+    return true;
+}
+
 int main (void) {
     //initialize DMA
     //initalize i2S
     //initalize pot adc
     //initalize midi
+    init_midi();
     //initialize oscillators
     //initialize envelope
+    init_set_priorities();
     init_midi_phase_table(&midi_to_phase_inc);
     add_repeating_timer_ms(-2, button_timer_cb, NULL, &button_timer);
 
@@ -83,19 +91,23 @@ void voice_allocation () {
 void init_midi_phase_table(uint32_t *table) {
     for (int n = 0; n < 128; n++) {
         // stndard MIDI note-to-frequency formula used A4 = note 69 = 440 hz
-        float freq = 440.0f * powf(2.0f, (float)(n - 69) / 12.0f);
+        double freq = 440.0f * powf(2.0f, (float)(n - 69) / 12.0f);
         
         // calculate 32-bit fixed-point phase increment
         // general formula: phase_inc = round(f * wavetable_size * 2^franctional precusion size)
 
-        double phase_inc_double = (freq * AKWF_WAVETABLE_SIZE * powf(2, 24)) / SAMPLE_RATE;
+        double phase_inc_double = (freq * AKWF_WAVETABLE_SIZE /** powf(2, 24)*/) / SAMPLE_RATE;
         //high 8 bits are index, lower for fractional interpolation (unused)
         table[n] = (uint32_t)phase_inc_double;
     }
 }
 
+void init_set_priorities(void) {
+    // TODO: set oscillator/envelope timer IRQ priorities once chosen
+    irq_set_priority(UART1_IRQ, 0xC0); // MIDI: lowest priority
+}
+
 void press_voice (Voice_t *voice, uint32_t phase_inc, uint8_t velocity) {
-    //voice->osc_table = ; fill in when wavetable cycling fx finished
     voice->env_state = ENV_STATE_OFF;
     voice->phase_acc = 0;
     voice->phase_inc = phase_inc;

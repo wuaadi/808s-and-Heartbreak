@@ -3,8 +3,15 @@
 
 int16_t g_audio; //final audio waveform to be sent to DMA
 
+void init_oscillator() {
+    //initalizes oscillator interrupts
+}
+
+
 Voice_t g_voices[NUM_VOICES];
 void ISR_oscillator (void) {
+  //ack interrupt
+
   // This function is called by the timer interrupt to generate audio samples
   // It will iterate through all active voices and sum their outputs
   int32_t mix = 0;
@@ -32,7 +39,6 @@ void voice_init(Voice_t *voice) {
   voice->phase_inc = 0;
   voice->velocity = 0;
 
-  voice->env_table = &env_a_table;
   voice->env_idx = 0;
   voice->a_inc = 0;
   voice->d_inc = 0;
@@ -57,6 +63,9 @@ void voices_init_all(Voice_t *voices, size_t count) {
 }
 
 void ISR_envelope(void) {
+  //ack interrupt
+
+
   for (int i = 0; i < NUM_VOICES; i++) {
     Voice_t *v = &g_voices[i];
     uint32_t level = 0;
