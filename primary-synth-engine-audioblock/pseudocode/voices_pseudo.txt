@@ -1,0 +1,28 @@
+//*********************************************
+
+
+typedef struct {
+    //
+    bool pressed,
+    //osc wavetable
+    uint16t *osc_wt,
+    uint32_t velocity,
+    //osc params
+    uint32_t phase_acc,
+    uint32_t phase_inc,
+    //envelope parameters
+    uint32_t env_idx,
+    uint8_t a_inc, d_inc, r_inc,
+    uint32_t s_level,
+    //more envelope stuff
+    EnvState_t env_state,
+    uint16_t env_level,
+    uint16_t env_level,
+    uint16_t env_amp_latch,
+    //voice stealing
+    uint32_t age,
+    
+} Voice_t;
+
+Voice_t g_v [NUM_VOICES];
+

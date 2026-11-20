@@ -5,13 +5,10 @@
 int16_t g_audioblock_A [AUDIOBLOCK_SIZE]
 int16_t g_audioblock_B [AUDIOBLOCK_SIZE]
 
-typedef struct {
-    ///....
-} Voice_t
 
 int16_t * g_current_audioblock;
 
-Voice_t g_v [NUM_VOICES]
+
 
 int16_t g_MIDInote_to_freq [127]
 
@@ -52,6 +49,11 @@ void env_update (voice) {
 //*******************************************************
 //audio block generation ISR
 void ISR_audioblock (void) {
+    //Triggered by DMA IRQ flag
+    clear DMA IRQ flag
+
+    //swap which buffer DMA reads
+
     //generates 64-sample audio block on per-voice block basis
     int16_t *ab = g_current_audioblock
     for (i < 16)
@@ -69,5 +71,10 @@ void ISR_audioblock (void) {
 //************************************************************
 //main loop
 int main (void) {
-    voice_allocation();
+    init_DMA();
+    init_MIDI():
+    init_AUDIO();
+    init_POTS();
+    for (;;)
+        voice_allocation();
 }
