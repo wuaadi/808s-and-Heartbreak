@@ -3,12 +3,32 @@
 
 #include "voices.h"
 
-// Inputs are 12-bit adc readings 0-4095.
-// Higher A/D/R readings produce slower stage n sustain spans 0 to 65535.
+//*******************************************************************************
+#define POT_ADC_MAX 4095u
+
+typedef struct {
+    uint8_t a_inc;
+    uint8_t d_inc;
+    uint8_t r_inc;
+    uint32_t s_level;
+} EnvParams_t;
+
+extern volatile EnvParams_t g_env_params;
+
+//***********************************************************************
+//functions list
+
+void pot_to_inc(uint16_t reading);
+
 EnvParams_t pot_decode(uint16_t a, uint16_t d, uint16_t s, uint16_t r);
 
-
 void pot_adc_init(void);
-void pot_isr(void);
+
+//Initialization functions
+void init_POT();
+
+bool debounce_wavetable(void);
+void cycle_wavetable(void);
+void init_button();
 
 #endif // POT_H

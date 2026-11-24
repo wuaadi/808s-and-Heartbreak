@@ -6,6 +6,8 @@
 #include <stdint.h>
 
 
+#define SAMPLE_RATE 40000 //change to 48KHz later
+
 // ---- Top Side: LCD Display (SPI0) -----------------------------------
 #define MCU1_LCD_SPI            spi0
 #define MCU1_LCD_SCK_PIN        18  // SPI0 SCK
@@ -36,4 +38,4 @@
 #define MCU1_I2S_LRCLK_PIN      30  // Frame clock
 #define MCU1_I2S_DOUT_PIN       31  // Data out
 
-#endif // MIDI_H
+#endif

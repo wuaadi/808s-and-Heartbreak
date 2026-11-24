@@ -9,6 +9,12 @@ static uint8_t pot_to_increment(uint16_t reading) {
     return (uint8_t)(UINT8_MAX - ((uint32_t)reading * (UINT8_MAX - 1u) / POT_ADC_MAX));
 }
 
+static bool button_timer_cb(repeating_timer_t *rt) {
+    (void)rt;
+    cycle_wavetable();
+    return true;
+}
+
 EnvParams_t pot_decode(uint16_t a, uint16_t d, uint16_t s, uint16_t r) {
     EnvParams_t params;
     params.a_inc = pot_to_increment(a);

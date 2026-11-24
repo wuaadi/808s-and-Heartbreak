@@ -1,0 +1,175 @@
+DMA + PIO AUDIO: HOW THE BLOCKS MOVE
+====================================
+
+The audio output has three separate jobs:
+
+1. The CPU calculates audio samples and stores them in RAM.
+2. DMA copies prepared words from RAM into the PIO transmit FIFO.
+3. PIO takes words from its FIFO and sends the bits on I2S pins.
+
+DMA does not create samples or send individual bits on the pins. PIO does
+not read the audio arrays in RAM. The DMA channel connects those two parts.
+
+
+WHAT A BUFFER MEANS
+-------------------
+
+There are two buffers, A and B. At any moment:
+
+    one buffer is owned by DMA (DMA may read it)
+    the other buffer is available to the CPU (CPU may fill it)
+
+Never let the CPU write a buffer while DMA is reading that same buffer.
+
+Example:
+
+    DMA reads A  ------------------------>
+    CPU fills B ------------------------->
+
+When DMA has copied all of A into the PIO FIFO, A is safe for the CPU to
+reuse. If B is ready, DMA can start reading B while the CPU fills A:
+
+    DMA reads B  ------------------------>
+    CPU fills A ------------------------->
+
+Then the same handoff repeats. This is called ping-pong buffering.
+
+
+IMPORTANT: DMA COMPLETION IS NOT THE END OF PLAYBACK
+----------------------------------------------------
+
+DMA completion means:
+
+    "The last word was copied from RAM into the PIO FIFO."
+
+It does NOT mean:
+
+    "The last sound represented by that word has finished playing."
+
+The PIO FIFO is a small queue of words waiting to be played. With the
+current TX setup, it holds 8 32-bit words. Because the current PIO format
+uses two words for one stereo audio frame, those 8 words are only 4 audio
+frames of queued audio. At 40,000 frames per second, that is about 100
+microseconds.
+
+Therefore, a DMA-completion interrupt should do only quick handoff work:
+
+    acknowledge the DMA interrupt
+    point DMA at the next buffer that is already ready
+    start the next transfer
+
+Do not wait until DMA completion to begin calculating the next 64 samples.
+If the CPU spends too long calculating inside that interrupt, PIO can empty
+its FIFO and audio output will pause.
+
+
+RECOMMENDED TIMELINE
+--------------------
+
+At startup:
+
+    initialize A and B to silence
+    render the first real block into A
+    start DMA reading A
+
+While DMA reads A:
+
+    CPU renders the next block into B
+
+When DMA finishes reading A:
+
+    DMA switches to B, which is already ready
+    CPU is now free to render into A
+
+When DMA finishes reading B:
+
+    DMA switches to A, which should now be ready
+    CPU is now free to render into B
+
+The CPU gets nearly one whole block of playback time to prepare the
+following block. The DMA interrupt only performs the quick switch; block
+generation happens while the other buffer is being sent.
+
+If a buffer is not ready at a handoff, do not let DMA read a buffer while
+the CPU is still filling it. Use a known-safe fallback, such as a silence
+buffer, and record that the CPU missed its deadline.
+
+
+WHAT THE CURRENT I2S PIO EXPECTS
+--------------------------------
+
+The current TX PIO sends one 32-bit word for each I2S channel slot. A
+mono sample is duplicated into the left and right slots:
+
+    left word  = one delay bit + 16 sample bits + 15 padding bits
+    right word = same format and sample value
+
+So one 64-sample mono audio block becomes:
+
+    64 samples * 2 channel words per sample = 128 DMA words
+
+Each word is 32 bits. The sample is placed in the word with:
+
+    channel_word = (uint16 sample) shifted left by 15 bits
+
+The signed 16-bit PCM samples do not become 32-bit audio samples. The
+uint32_t values below are only the serialized I2S slot words that DMA
+copies to the PIO.
+
+The current PIO therefore needs 128 packed uint32_t slot words for one
+64-sample block. For each int16_t sample, put its packed slot value in
+two consecutive entries (left, then right).
+
+The current audio arrays are int16_t[64]. They are not already in this
+32-bit I2S format. Configuring DMA for 32-bit transfers and a count of 64
+does not convert those samples: it reads 64 32-bit words (256 bytes) from
+a 128-byte int16_t array, going past the end of that array.
+
+Recommended design:
+
+    Keep the CPU's audio/render buffers as int16_t samples. Use separate
+    uint32_t[128] I2S/DMA buffers for the packed left/right slot words.
+    Pack each completed audio block before giving its I2S buffer to DMA.
+
+Alternative design:
+
+    Make the ping-pong buffers themselves uint32_t[128] and have the
+    renderer store each int16_t PCM result directly into its packed
+    left/right slot entries. This combines rendering and I2S packing; it
+    is not required, and the actual sample payload is still signed 16-bit.
+
+Do not use the CPU function that writes samples directly to the PIO FIFO
+at the same time as DMA. Choose one FIFO writer; for this design, DMA is
+the writer.
+
+
+POINTERS AND DMA REGISTERS
+--------------------------
+
+A C pointer such as g_audioblock_I2S is only a variable in software.
+Changing it does not automatically change the DMA channel's read address.
+At each handoff, software must program DMA with the new buffer address and
+the correct transfer count, then start the transfer.
+
+The current swap_audioblocks() test uses g_audioblock_A, which is an array.
+An array's address is always nonzero, so that test always chooses buffer B.
+Swap the actual buffer pointers instead, and only hand a buffer to DMA
+after the CPU has finished rendering and packing it.
+
+
+BLOCK SIZES AND TIMING
+----------------------
+
+At a 40 kHz sample rate, a 64-sample block represents:
+
+    64 / 40000 seconds = 1.6 milliseconds
+
+For the current two-words-per-sample PIO format, DMA transfers 128
+32-bit words per block. Configure the DMA transfer size as 32 bits and
+the transfer count as 128 words. The PIO TX FIFO DREQ paces DMA so words
+are transferred only as the PIO FIFO has room.
+
+The DMA must be started after configuration. For continuous playback,
+enable its completion interrupt, acknowledge each completion, select a
+ready buffer, update the DMA read address and transfer count, and start
+the next transfer.

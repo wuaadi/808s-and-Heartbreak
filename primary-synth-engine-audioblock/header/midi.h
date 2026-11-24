@@ -3,36 +3,60 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-typedef enum {
-    //fill in with AKWF-FREE wavetable names
-    SINE,
-    SAW,
-    TRIANGLE,
 
-} WavetableMode_t;
+#define MIDI_RINGBUFFER_SIZE 256
+#define MIDI_UART_BAUD_RATE 31250
 
-WavetableMode_t wtable_mode;
-
-uint8_t cycle_wtable_matrix;
-
+//Custom types
 //midi channel number
-const uint8_t MIDI_CHANNEL = 0x0; //midi channel 1, zero-based indexing
+#define MIDI_CHANNEL        0x0 //midi channel 1, zero-based indexing
 //midi channels codes (only top 4 bytes)
-const uint8_t MIDI_NOTE_OFF =  0x80 | (MIDI_CHANNEL & 0xF);
-const uint8_t MIDI_NOTE_ON = 0x90 | (MIDI_CHANNEL & 0xF);
-const uint8_t MIDI_POLY_PRESSURE = 0xA0 | (MIDI_CHANNEL & 0xF);
-const uint8_t MIDI_CTRL_CHANGE = 0xB0 | (MIDI_CHANNEL & 0xF);
-const uint8_t MIDI_PRG_CHANGE = 0xC0 | (MIDI_CHANNEL & 0xF);
-const uint8_t MIDI_CHAN_PRESSURE = 0xD0 | (MIDI_CHANNEL & 0xF);
-const uint8_t MIDI_PITCH_BEND = 0xE0 | (MIDI_CHANNEL & 0xF);
-//
+#define MIDI_NOTE_OFF       (0x80 | (MIDI_CHANNEL & 0xF))
+#define MIDI_NOTE_ON        (0x90 | (MIDI_CHANNEL & 0xF))
+#define MIDI_POLY_PRESSURE  (0xA0 | (MIDI_CHANNEL & 0xF))
+#define MIDI_CTRL_CHANGE    (0xB0 | (MIDI_CHANNEL & 0xF))
+#define MIDI_PRG_CHANGE     (0xC0 | (MIDI_CHANNEL & 0xF))
+#define MIDI_CHAN_PRESSURE  (0xD0 | (MIDI_CHANNEL & 0xF))
+#define MIDI_PITCH_BEND     (0xE0 | (MIDI_CHANNEL & 0xF))
 
+typedef struct{
+  volatile MidiNote_t fifo[MIDI_RINGBUFFER_SIZE];
+  volatile uint8_t head;
+  volatile uint8_t tail;
+} MidiRingBuffer_t;
+
+extern MidiRingBuffer_t g_midi_rb;
+
+typedef uint8_t MidiByte_t;
 volatile MidiByte_t midi_event_last;
+typedef struct {
+  MidiByte_t event;
+  MidiByte_t velocity;
+  MidiByte_t number;
+} MidiNote_t;
 
 
-//functions
-void midi_uart_init ();
 
-void ISR_midi ();
+typedef enum {
+    MIDI_STATE_WAIT_FOR_STATUS,
+    MIDI_STATE_WAIT_FOR_DATA1,
+    MIDI_STATE_WAIT_FOR_DATA2,
+    MIDI_STATE_WAIT_FOR_SYSEX, //unused
+    MIDI_STATE_RUNNING_STATUS, //unused
+    MIDI_STATE_ERROR,
+} MidiFSMState_t;
 
-#endif
+extern MidiFSMState_t g_midi_fsm;
+
+
+//**************************************************************************
+//function list
+MidiNote_t dq_midi_rb(MidiRingBuffer_t *rb);
+int eq_midi_rb(MidiRingBuffer_t *rb, MidiNote_t new_note);
+
+void init_midi(void);
+void midi_uart_init(void);
+void ISR_midi(void);
+
+
+//ISR
