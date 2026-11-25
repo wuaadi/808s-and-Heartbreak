@@ -29,10 +29,10 @@ EnvParams_t pot_decode(uint16_t a, uint16_t d, uint16_t s, uint16_t r) {
 
 void pot_adc_init(void) {
     adc_init();
-    adc_gpio_init(MCU1_ATTACK_POT_PIN);
-    adc_gpio_init(MCU1_DECAY_POT_PIN);
-    adc_gpio_init(MCU1_SUSTAIN_POT_PIN);
-    adc_gpio_init(MCU1_RELEASE_POT_PIN);
+    adc_gpio_init(MCU0_ATTACK_POT_PIN);
+    adc_gpio_init(MCU0_DECAY_POT_PIN);
+    adc_gpio_init(MCU0_SUSTAIN_POT_PIN);
+    adc_gpio_init(MCU0_RELEASE_POT_PIN);
 
 }
 
@@ -52,13 +52,13 @@ void init_button();
 //ISR
 
 void ISR_pot () {
-    adc_select_input(MCU1_ATTACK_POT_ADC);
+    adc_select_input(MCU0_ATTACK_POT_ADC);
     uint16_t attack = adc_read();
-    adc_select_input(MCU1_DECAY_POT_ADC);
+    adc_select_input(MCU0_DECAY_POT_ADC);
     uint16_t decay = adc_read();
-    adc_select_input(MCU1_SUSTAIN_POT_ADC);
+    adc_select_input(MCU0_SUSTAIN_POT_ADC);
     uint16_t sustain = adc_read();
-    adc_select_input(MCU1_RELEASE_POT_ADC);
+    adc_select_input(MCU0_RELEASE_POT_ADC);
     uint16_t release = adc_read();
 
     g_env_params = pot_decode(attack, decay, sustain, release);

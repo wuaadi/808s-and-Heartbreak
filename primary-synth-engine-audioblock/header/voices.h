@@ -13,11 +13,15 @@
 #define NUM_VOICES 16 //size of voice array
 #define AUDIOBLOCK_SIZE 64
 
+
+#define DMA_CHANNEL 0
+#define DMA_IRQ DMA_IRQ_0 
+
 typedef struct {
     //
     bool pressed,
     //osc wavetable
-    uint16t *osc_wt,
+    int16_t * osc_table,
     uint32_t velocity,
     //osc params
     uint32_t phase_acc,

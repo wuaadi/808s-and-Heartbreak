@@ -37,17 +37,17 @@ void init_i2s_tx(void) {
         pio_encode_jmp_x_dec(6) | pio_encode_sideset(1, 1);
     i2s_tx_instructions[8] = pio_encode_set(pio_pins, 0);
 
-    pio_gpio_init(pio, MCU1_I2S_BCLK_PIN);
-    pio_gpio_init(pio, MCU1_I2S_LRCLK_PIN);
-    pio_gpio_init(pio, MCU1_I2S_DOUT_PIN);
+    pio_gpio_init(pio, MCU0_I2S_BCLK_PIN);
+    pio_gpio_init(pio, MCU0_I2S_LRCLK_PIN);
+    pio_gpio_init(pio, MCU0_I2S_DOUT_PIN);
 
     uint offset = pio_add_program_at_offset(pio, &i2s_tx_program, 0);
 
     pio_sm_config cfg = pio_get_default_sm_config();
-    sm_config_set_out_pins(&cfg, MCU1_I2S_DOUT_PIN, 1);
-    sm_config_set_set_pins(&cfg, MCU1_I2S_LRCLK_PIN, 1);
+    sm_config_set_out_pins(&cfg, MCU0_I2S_DOUT_PIN, 1);
+    sm_config_set_set_pins(&cfg, MCU0_I2S_LRCLK_PIN, 1);
     sm_config_set_sideset(&cfg, 1, false, false);
-    sm_config_set_sideset_pins(&cfg, MCU1_I2S_BCLK_PIN);
+    sm_config_set_sideset_pins(&cfg, MCU0_I2S_BCLK_PIN);
     sm_config_set_out_shift(&cfg, false, true, 32);
     sm_config_set_fifo_join(&cfg, PIO_FIFO_JOIN_TX);
 
@@ -57,9 +57,9 @@ void init_i2s_tx(void) {
 
     sm_config_set_wrap(&cfg, offset, offset + 8);
 
-    pio_sm_set_consecutive_pindirs(pio, sm, MCU1_I2S_BCLK_PIN, 1, true);
-    pio_sm_set_consecutive_pindirs(pio, sm, MCU1_I2S_LRCLK_PIN, 1, true);
-    pio_sm_set_consecutive_pindirs(pio, sm, MCU1_I2S_DOUT_PIN, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, MCU0_I2S_BCLK_PIN, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, MCU0_I2S_LRCLK_PIN, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, MCU0_I2S_DOUT_PIN, 1, true);
 
     pio_sm_init(pio, sm, offset, &cfg);
     pio_sm_clear_fifos(pio, sm);

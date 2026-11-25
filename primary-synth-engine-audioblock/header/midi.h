@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 #define MIDI_RINGBUFFER_SIZE 256
-#define MIDI_UART_BAUD_RATE 31250
+#define MIDI_IRQ UART0_IRQ
 
 //Custom types
 //midi channel number

@@ -5,6 +5,10 @@
 
 //*******************************************************************************
 #define POT_ADC_MAX 4095u
+#define POT_IRQ TIMER0_IRQ_0
+#define ALARM_NUM TIMER0_IRQ_0
+//microseconds between interrupts
+#define POT_PERIOD_US 50000
 
 typedef struct {
     uint8_t a_inc;

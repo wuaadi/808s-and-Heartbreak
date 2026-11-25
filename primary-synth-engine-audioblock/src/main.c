@@ -1,9 +1,17 @@
+#include <stdio.h>
+#include <string.h>
+#include "pico/stdlib.h"
+#include "hardware/timer.h"
+#include "hardware/irq.h"
+#include "hardware/dma.h"
+#include "hardware/adc.h"
+#include "hardware/sync.h"
+
 #include "voices.h"
-#include <stdlib.h>
 #include "osc.h"
 #include "midi.h"
 #include "gpio.h"
-#include "hardware/sync.h"
+
 
 //Data structures list for VOICE ALLOCATION
 
@@ -16,7 +24,50 @@ uint32_t * g_block_I2S; //the block that is currently being processed by I2S/DMA
 uint32_t g_MIDInote_to_freq [127];
 
 //*********************************************************
-//Function list for VOICE ALLOCATION
+//Function declarations
+void newpress (uint32_t phase_inc);
+void newrelease (uint32_t phase_inc);
+void voice_allocation();
+uint32_t freq_to_phase(uint32_t freq);
+void env_update (Voice_t *v);
+void init_midi_phase_table(uint32_t *table);
+
+void render_block (int16_t * block);
+void format_for_pio(int32_t * arr);
+void init_set_priorities(void);
+
+//*******************************************************
+//audio block generation ISR
+void ISR_audioblock (void) { //COMPLETE
+    //Triggered by DMA IRQ flag
+    dma_channel_acknowledge_irq0(DMA_CHANNEL);
+
+    //swap which buffer DMA reads
+    swap_audioblocks();
+    //reconfig DMA write address after swapping
+    dma_channel_set_read_addr
+    (
+        DMA_CHANNEL, //same dma channel 0
+        g_block_I2S, //reassign pointer after swap
+        true //trigger DMA on new block
+    );
+    //generates 64-sample audio block on per-voice block basis
+    render_block(g_block_CPU);
+}
+
+//************************************************************
+//main loop
+int main (void) {
+    init_MIDI():
+    init_POT();
+    init_AUDIO();
+    for (;;) {
+        voice_allocation();
+    }
+} //main()
+
+//************************************************************** */
+//FUNCTION LIST FOR VOICE alloca
 
 void newpress (uint32_t phase_inc) { //complete
     //variables to keep track of:
@@ -141,19 +192,10 @@ void init_midi_phase_table(uint32_t *table) { //complete
     }
 }
 
-//*******************************************************
-//audio block generation ISR
-void ISR_audioblock (void) { //incomplete: TO-DO: clear IRQ
-    //Triggered by DMA IRQ flag
-    clear DMA IRQ flag
+//***************************************************************** */
+//FX LIST FOR AUDIOBLOCK ISR
 
-    //swap which buffer DMA reads
-    swap_audioblocks();
-    //generates 64-sample audio block on per-voice block basis
-    render_block(g_block_CPU);
-}
-
-void render_block (int16_t * block) { //incomplete TO-DO: do audio summing
+void render_block (int16_t * block) { //COMPLETE
     uint32_t *ab = g_block_CPU;
     //clear block
     for (int k=0; k<AUDIOBLOCK_SIZE; k++) 
@@ -168,13 +210,14 @@ void render_block (int16_t * block) { //incomplete TO-DO: do audio summing
             //do all generation for each sample
             v->phase_acc += v->phase_inc;
             int32_t s = (int32_t)v->osc_table[v->phase_acc >> 24] - 32768; //subtract dc offset; choose only top 8 index bits from phase
+            //aduio summing
             ab[i] += (s * (int32_t)(v->env_level >> 1)) >> 15; //total right-shift = 16      
         } //if
     }//for
     format_for_pio (ab);
 } //render_block
 
-void format_for_pio(int32_t * arr) {
+void format_for_pio(int32_t * arr) { //COMPLETE
     //handles scaling for sum, shifting for pio output
     for (int i=0; i<NUM_VOICES; i++)
         if (arr[i] > INT16_MAX) arr[i] = INT16_MAX;
@@ -183,20 +226,9 @@ void format_for_pio(int32_t * arr) {
         arr[i] <<= 15;
 } //format_for_pio
 
-void init_set_priorities(void) { //INCOMPLETE
+void init_set_priorities(void) { //COMPLETE
     // TODO: set oscillator/envelope timer IRQ priorities once chosen
-    irq_set_priority(OSCILLATOR_IRQ, 0x00); // highest of these
-    irq_set_priority(ENVELOPE_IRQ,   0x40);
-    irq_set_priority(UART0_IRQ,     0xC0); // MIDI: lower priority
-}
-
-//************************************************************
-//main loop
-int main (void) {
-    init_DMA();
-    init_MIDI():
-    init_AUDIO();
-    init_POTS();
-    for (;;)
-        voice_allocation();
+    irq_set_priority(MIDI_IRQ, 0x00); // MIDI is most important
+    irq_set_priority(DMA_IRQ,   0x40); //then audio block generation (takes a while)
+    irq_set_priority(POT_IRQ,     0xC0); // pot least important
 }

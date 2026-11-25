@@ -7,6 +7,7 @@ MidiRingBuffer_t g_midi_rb;
 MidiFSMState_t g_midi_fsm;
 WavetableMode_t wtable_mode;
 uint8_t cycle_wtable_matrix;
+MidiNote_t g_midi_note; //full MIDI note currently being built
 
 const uint16_t *const wavetables[WTABLE_MODE_COUNT] = {
     [PLAIN_SINE]    = PLAIN_sin,
@@ -27,74 +28,21 @@ const uint16_t *const wavetables[WTABLE_MODE_COUNT] = {
     [AKWF_EBASS]    = AKWF_ebass_0001,
 };
 
+//fx declarations
+MidiNote_t dq_midi_rb (MidiRingBuffer_t *rb);
+int eq_midi_rb (MidiRingBuffer_t *rb, MidiNote_t new_note);
+void init_midi ();
+void midi_uart_init ();
 
-
-MidiNote_t dq_midi_rb (MidiRingBuffer_t *rb) {
-    MidiNote_t event = rb->fifo[rb->tail];
-    rb->tail++;
-    return event;
-}
-
-int eq_midi_rb (MidiRingBuffer_t *rb, MidiNote_t new_note) {
-    //overwrites oldest byte in case of overflow
-    rb->head++;
-    int overflow = ((rb->head) == rb->tail);
-    if (overflow) rb->tail++;
-    rb->fifo[rb->head] = new_note;
-    return overflow;
-}
-
-bool debounce_wavetable() {
-    //handles debouncing for cycle_wtable_button
-    //pull down wiring implies pressed == 1
-    uint8_t sample = gpio_get(MCU1_WAVETABLE_BTN_PIN) ? 1 : 0;
-    //newpress will be either 0 or 1
-    cycle_wtable_matrix = (uint8_t)((cycle_wtable_matrix << 1) | sample);
-    //return true if the matrix is a rising edge
-    return ((cycle_wtable_matrix & 0xFF) == 0x0F);
-}
-
-//button press cycles through wavetables
-void cycle_wavetable() {
-    //increment through pointer array of wavetables, should wrap around at end
-    if (!debounce_wavetable())
-        return;
-    wtable_mode = (WavetableMode_t)((wtable_mode + 1) % WTABLE_MODE_COUNT);
-    
-    //assign wavetables depending on mode
-    //envelope state does not affect wavetable selection
-    const uint16_t *table = wavetables[wtable_mode];
-    for (int i = 0; i < NUM_VOICES; i++)
-        g_voices[i].osc_table = table;
-    
-   return;
-}
-
-void init_midi () {
-    cycle_wtable_matrix = 0;
-    gpio_init(MCU1_WAVETABLE_BTN_PIN);
-    gpio_set_dir(MCU1_WAVETABLE_BTN_PIN, GPIO_IN);
-    gpio_pull_down(MCU1_WAVETABLE_BTN_PIN);
-}
-
-
-void midi_uart_init () {
-    gpio_set_function(MCU1_MIDI_RX_PIN, UART_FUNCSEL_NUM(MCU1_MIDI_UART, MCU1_MIDI_RX_PIN));
-    
-    uart_init(MCU1_MIDI_UART, MCU1_MIDI_BAUD);
-    uart_set_format (MCU1_MIDI_UART, 8, 1, 0);
-    //set up isr_midi as handler
-
-}
-
-
+//************************************************************** */
+//isr
 void ISR_midi () {
     //acknowledge interrupt
     
     //read byte from uart
-    if (!uart_is_readable(MCU1_MIDI_UART))
+    if (!uart_is_readable(MCU0_MIDI_UART))
         return;
-    uint8_t byte = uart_getc(MCU1_MIDI_UART);
+    uint8_t byte = uart_getc(MCU0_MIDI_UART);
     //feed into state machine
     if (byte & 0x80) {
         //if MSB != 0, is status byte
@@ -106,6 +54,40 @@ void ISR_midi () {
         //channel bytes, ignore any byte not within 0 - 127
         
     }
-
 }
 
+//******************************************************************** */
+//fx definitions
+MidiNote_t dq_midi_rb (MidiRingBuffer_t *rb) { //COMPLETE
+    MidiNote_t event = rb->fifo[rb->tail];
+    rb->tail++;
+    return event;
+}
+
+int eq_midi_rb (MidiRingBuffer_t *rb, MidiNote_t new_note) { //COMPLETE
+    //overwrites oldest byte in case of overflow
+    rb->head++;
+    int overflow = ((rb->head) == rb->tail);
+    if (overflow) rb->tail++;
+    rb->fifo[rb->head] = new_note;
+    return overflow;
+}
+
+void init_midi () { //COMPLETE
+    cycle_wtable_matrix = 0;
+    gpio_init(MCU0_WAVETABLE_BTN_PIN);
+    gpio_set_dir(MCU0_WAVETABLE_BTN_PIN, GPIO_IN);
+    gpio_pull_down(MCU0_WAVETABLE_BTN_PIN);
+
+    midi_uart_init();
+}
+
+void midi_uart_init () { //INCOMPLETE
+    gpio_set_function(MCU0_MIDI_RX_PIN, UART_FUNCSEL_NUM(MCU0_MIDI_UART, MCU0_MIDI_RX_PIN));
+    
+    uart_init(MCU0_MIDI_UART, MCU0_MIDI_BAUD);
+    uart_set_format (MCU0_MIDI_UART, 8, 1, UART_PARITY_NONE);
+    //set up isr_midi as handler
+    irq_set_exclusive_handler(MIDI_IRQ, ISR_midi);
+    irq_set_enabled(MIDI_IRQ, true);
+}
