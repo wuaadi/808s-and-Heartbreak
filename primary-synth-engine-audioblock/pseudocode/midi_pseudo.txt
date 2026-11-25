@@ -1,41 +1,130 @@
 
-//Custom types
-//midi channel number
-#define MIDI_CHANNEL        0x0 //midi channel 1, zero-based indexing
-//midi channels codes (only top 4 bytes)
-#define MIDI_NOTE_OFF       (0x80 | (MIDI_CHANNEL & 0xF))
-#define MIDI_NOTE_ON        (0x90 | (MIDI_CHANNEL & 0xF))
-#define MIDI_POLY_PRESSURE  (0xA0 | (MIDI_CHANNEL & 0xF))
-#define MIDI_CTRL_CHANGE    (0xB0 | (MIDI_CHANNEL & 0xF))
-#define MIDI_PRG_CHANGE     (0xC0 | (MIDI_CHANNEL & 0xF))
-#define MIDI_CHAN_PRESSURE  (0xD0 | (MIDI_CHANNEL & 0xF))
-#define MIDI_PITCH_BEND     (0xE0 | (MIDI_CHANNEL & 0xF))
 
-typedef struct{
-  volatile MidiNote_t fifo[MIDI_RINGBUFFER_SIZE];
-  volatile uint8_t head;
-  volatile uint8_t tail;
-} MidiRingBuffer_t;
+//SOURCE:
+https://midi.org/summary-of-midi-1-0-messages
 
-extern MidiRingBuffer_t g_midi_rb;
+//FSM BASIC:
+MIDI FSM BEGIN:
+  for each received byte:
+    if real-time: ignore it, preserving state
+    else if system status: clear running status; go idle
+    else if channel status: save or ignore it; set the next state
+    else: handle data according to the current state
+END:
 
-typedef uint8_t MidiByte_t;
-volatile MidiByte_t midi_event_last;
-typedef struct {
-  MidiByte_t event;
-  MidiByte_t velocity;
-  MidiByte_t number;
-} MidiNote_t;
+//FSM  v2:
 
+variable RUNNING_STATUS
+define CLEAR_RUNNING_STATUS 0x0
+MIDI FSM BEGIN
+  for each received byte  :
+    if IGNORE2, STATE = IGNORE1
+    if system real-time BEGIN:
+      STATE = IGNORE1
+    END
+    else if system status BEGIN:
+      //clear running status; go idle
+      RUNNING_STATUS = CLEAR_RUNNING_STATUS
+      STATE = IGNORE1
+    END
+    else if channel status BEGIN:
+      RUNNING_STATUS = CLEAR_RUNNING_STATUS
+      if MIDI_POLY_PRESSURE || MIDI_PITCH_BEND || MIDI_CTRL_CHANGE
+        STATE = IGNORE2
+      else if MIDI_PRG_CHANGE || MIDI_CHAN_PRESSURE
+        STATE = IGNORE1
+    END
+    else BEGIN: handle data according to the current state
+      //note on
+      if MIDI_NOTE_ON_STATUS
+        RUNNING_STATUS = byte
+        g_midi_note.event = byte
+      else if MIDI_NOTE_ON_NUM
+        g_midi_note.event = RUNNING_STATUS
+        g_midi_note.number = byte
+      else if MIDI_NOTE_ON_VELOCITY
+        g_midi_note.event = RUNNING_STATUS
+        g_midi_note.velocity = byte
+      //note off
+      if MIDI_NOTE_OFF_STATUS
+        RUNNING_STATUS = byte
+        g_midi_note.event = byte
+      else if MIDI_NOTE_ON_NUM
+        g_midi_note.event = RUNNING_STATUS
+        g_midi_note.number = byte
+      else if MIDI_NOTE_ON_VELOCITY
+        if byte 0 event = NOTE_OFF
+        g_midi_note.event = RUNNING_STATUS
+        g_midi_note.velocity = byte
 
-//**************************************************************************
-//function list
-MidiNote_t dq_midi_rb(MidiRingBuffer_t *rb);
-int eq_midi_rb(MidiRingBuffer_t *rb, MidiNote_t new_note);
+    END
 
-void init_midi(void);
-void midi_uart_init(void);
-void ISR_midi(void);
+END
 
+//fsm v3 (copilot)
+if real-time:
+    do nothing
+else if system status:
+    clear running status; state = IDLE
+else if channel status:
+    if desired Note On/Off:
+        running status = byte; state = WAIT_NUMBER
+    else:
+        clear running status; state = IDLE
+else if state == WAIT_NUMBER:
+    save note number; state = WAIT_VELOCITY
+else if state == WAIT_VELOCITY:
+    create and enqueue note
+    state = WAIT_NUMBER
 
-//ISR
+//fsm v4
+typedef enum {
+    MIDI_STATE_WAIT_FOR_STATUS,
+    MIDI_STATE_WAIT_FOR_DATA1,
+    MIDI_STATE_WAIT_FOR_DATA2,
+} MidiFSMState_t;
+
+MidiFSMState_t g_midi_fsm;
+MidiNote_t g_midi_note;
+MidiByte_t g_midi_running_status;
+void midi_fsm(uint8_t byte) {
+    if (byte >= 0xF8) {
+        // System real-time messages do not disturb an in-progress message.
+        return;
+    }
+    if (byte >= 0xF0) {
+        // system common and SysEx cancel running stats
+        g_midi_running_status = 0;
+        g_midi_fsm = MIDI_STATE_WAIT_FOR_STATUS;
+        return;
+    }
+    if (byte & 0x80) {
+        if (byte == MIDI_NOTE_ON || byte == MIDI_NOTE_OFF) {
+            g_midi_running_status = byte;
+            g_midi_fsm = MIDI_STATE_WAIT_FOR_DATA1;
+        } else {
+            // ignore other channels and channel voice mesg
+            g_midi_running_status = 0;
+            g_midi_fsm = MIDI_STATE_WAIT_FOR_STATUS;
+        }
+        return;
+    }
+
+    if (g_midi_fsm == MIDI_STATE_WAIT_FOR_DATA1) {
+        //note number
+        g_midi_note.number = byte;
+        g_midi_fsm = MIDI_STATE_WAIT_FOR_DATA2;
+    } else if (g_midi_fsm == MIDI_STATE_WAIT_FOR_DATA2) {
+        //velocity
+        g_midi_note.velocity = byte;
+        g_midi_note.event = g_midi_running_status;
+        if (g_midi_note.event == MIDI_NOTE_ON && byte == 0) {
+            //zero velocity => turn off note
+            g_midi_note.event = MIDI_NOTE_OFF;
+        }
+        if (eq_midi_rb(&g_midi_rb, g_midi_note)) {
+            report_midi_overflow(); // Define an overflow reporting mechanism.
+        }
+        g_midi_fsm = MIDI_STATE_WAIT_FOR_DATA1;
+    }
+}

@@ -6,6 +6,7 @@ volatile EnvParams_t g_env_params;
 MidiRingBuffer_t g_midi_rb;
 MidiFSMState_t g_midi_fsm;
 WavetableMode_t wtable_mode;
+MidiByte_t g_midi_running_status;
 uint8_t cycle_wtable_matrix;
 MidiNote_t g_midi_note; //full MIDI note currently being built
 
@@ -33,27 +34,19 @@ MidiNote_t dq_midi_rb (MidiRingBuffer_t *rb);
 int eq_midi_rb (MidiRingBuffer_t *rb, MidiNote_t new_note);
 void init_midi ();
 void midi_uart_init ();
+report_midi_overflow();
+void midi_fsm(uint8_t byte);
 
 //************************************************************** */
 //isr
-void ISR_midi () {
-    //acknowledge interrupt
-    
+void ISR_midi () { //COMPLETE
+    //acknowledge interrupt; copied from lab 7
+    uart_get_hw(MCU0_MIDI_UART)->icr = UART_UARTICR_RXIC_BITS;
     //read byte from uart
     if (!uart_is_readable(MCU0_MIDI_UART))
         return;
-    uint8_t byte = uart_getc(MCU0_MIDI_UART);
     //feed into state machine
-    if (byte & 0x80) {
-        //if MSB != 0, is status byte
-
-        if (byte == MIDI_NOTE_ON || byte == MIDI_NOTE_OFF)
-            midi_event_last = byte;
-    }
-    else {
-        //channel bytes, ignore any byte not within 0 - 127
-        
-    }
+    midi_fsm(uart_getc(MCU0_MIDI_UART));
 }
 
 //******************************************************************** */
@@ -73,21 +66,70 @@ int eq_midi_rb (MidiRingBuffer_t *rb, MidiNote_t new_note) { //COMPLETE
     return overflow;
 }
 
+void report_midi_overflow() { //INCOMPLETE
+    return;
+}
+
 void init_midi () { //COMPLETE
     cycle_wtable_matrix = 0;
     gpio_init(MCU0_WAVETABLE_BTN_PIN);
     gpio_set_dir(MCU0_WAVETABLE_BTN_PIN, GPIO_IN);
     gpio_pull_down(MCU0_WAVETABLE_BTN_PIN);
 
+    g_midi_fsm = MIDI_STATE_WAIT_FOR_STATUS;
+
     midi_uart_init();
 }
 
-void midi_uart_init () { //INCOMPLETE
+void midi_uart_init () { //COMPLETE
     gpio_set_function(MCU0_MIDI_RX_PIN, UART_FUNCSEL_NUM(MCU0_MIDI_UART, MCU0_MIDI_RX_PIN));
     
     uart_init(MCU0_MIDI_UART, MCU0_MIDI_BAUD);
     uart_set_format (MCU0_MIDI_UART, 8, 1, UART_PARITY_NONE);
     //set up isr_midi as handler
     irq_set_exclusive_handler(MIDI_IRQ, ISR_midi);
+    uart_set_irq_enables(MCU0_MIDI_UART, true, false);
     irq_set_enabled(MIDI_IRQ, true);
 }
+
+void midi_fsm(uint8_t byte) { //COMPLETE
+    if (byte >= 0xF8) {
+        // isgnore system real time messages
+        return;
+    }
+    if (byte >= 0xF0) {
+        // system common and SysEx cancel running stats
+        g_midi_running_status = 0;
+        g_midi_fsm = MIDI_STATE_WAIT_FOR_STATUS;
+        return;
+    }
+    if (byte & 0x80) {
+        if (byte == MIDI_NOTE_ON || byte == MIDI_NOTE_OFF) {
+            g_midi_running_status = byte;
+            g_midi_fsm = MIDI_STATE_WAIT_FOR_DATA1;
+        } else {
+            // ignore other channels and channel voice mesg
+            g_midi_running_status = 0;
+            g_midi_fsm = MIDI_STATE_WAIT_FOR_STATUS;
+        }
+        return;
+    }
+
+    if (g_midi_fsm == MIDI_STATE_WAIT_FOR_DATA1) {
+        //note number
+        g_midi_note.number = byte;
+        g_midi_fsm = MIDI_STATE_WAIT_FOR_DATA2;
+    } else if (g_midi_fsm == MIDI_STATE_WAIT_FOR_DATA2) {
+        //velocity
+        g_midi_note.velocity = byte;
+        g_midi_note.event = g_midi_running_status;
+        if (g_midi_note.event == MIDI_NOTE_ON && byte == 0) {
+            //zero velocity => turn off note
+            g_midi_note.event = MIDI_NOTE_OFF;
+        }
+        if (eq_midi_rb(&g_midi_rb, g_midi_note)) {
+            report_midi_overflow();
+        }
+        g_midi_fsm = MIDI_STATE_WAIT_FOR_DATA1;
+    }
+} //midi_fsm

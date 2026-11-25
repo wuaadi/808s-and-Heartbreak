@@ -19,23 +19,23 @@
 
 typedef struct {
     //
-    bool pressed,
+    bool pressed
     //osc wavetable
-    int16_t * osc_table,
-    uint32_t velocity,
+    int16_t *osc_table;
+    uint8_t notenum;
     //osc params
-    uint32_t phase_acc,
-    uint32_t phase_inc,
+    uint32_t phase_acc;
+    uint32_t phase_inc;
     //envelope parameters
-    uint32_t env_idx,
-    uint8_t a_inc, d_inc, r_inc,
-    uint32_t s_level,
+    uint32_t env_idx;
+    uint8_t a_inc, d_inc, r_inc;
+    uint32_t s_level;
     //more envelope stuff
-    EnvState_t env_state,
-    uint16_t env_level,
-    uint16_t env_amp_latch,
+    EnvState_t env_state;
+    uint16_t env_level;
+    uint16_t env_amp_latch;
     //voice stealing
-    uint32_t age
+    uint32_t age;
     
 } Voice_t;
 

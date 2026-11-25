@@ -10,6 +10,8 @@
 //microseconds between interrupts
 #define POT_PERIOD_US 50000
 
+#define WTABLE_MODE_COUNT 16
+
 typedef struct {
     uint8_t a_inc;
     uint8_t d_inc;
@@ -18,6 +20,9 @@ typedef struct {
 } EnvParams_t;
 
 extern volatile EnvParams_t g_env_params;
+
+extern const uint16_t *const wavetables[WTABLE_MODE_COUNT];
+
 
 //***********************************************************************
 //functions list

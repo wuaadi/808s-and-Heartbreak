@@ -8,7 +8,6 @@
 #include "hardware/sync.h"
 
 #include "voices.h"
-#include "osc.h"
 #include "midi.h"
 #include "gpio.h"
 
@@ -21,12 +20,12 @@ uint32_t g_block_B [AUDIOBLOCK_SIZE];
 uint32_t * g_block_CPU; //the block that is currently being generated
 uint32_t * g_block_I2S; //the block that is currently being processed by I2S/DMA
 
-uint32_t g_MIDInote_to_freq [127];
+uint32_t g_MIDInote_to_phase [127];
 
 //*********************************************************
 //Function declarations
-void newpress (uint32_t phase_inc);
-void newrelease (uint32_t phase_inc);
+void newpress (uint8_t notenum);
+void newrelease (uint8_t notenum);
 void voice_allocation();
 uint32_t freq_to_phase(uint32_t freq);
 void env_update (Voice_t *v);
@@ -69,14 +68,14 @@ int main (void) {
 //************************************************************** */
 //FUNCTION LIST FOR VOICE alloca
 
-void newpress (uint32_t phase_inc) { //complete
+void newpress (uint32_t notenum) { //complete
     //variables to keep track of:
     int age_oldest = 0;
     int idx_target = -1;
     for (int i=0; i<NUM_VOICES; i++) {
         g_v[i].age++; //unconditionally increment all voice ages
         //a. if same note is already playing, restart it
-        if (g_v[i].phase_inc == phase_inc && g_v[i].pressed == true) {
+        if (g_v[i].phase_inc == g_MIDInote_to_phase [notenum] && g_v[i].pressed == true) {
             idx_target = i;
             break;
         }
@@ -93,17 +92,17 @@ void newpress (uint32_t phase_inc) { //complete
     } //for
     //turn on the target voice
     if (idx_target >= 0) {
-        g_v[idx_target].phase_inc = phase_inc;
+        g_v[idx_target].phase_inc = g_MIDInote_to_phase [notenum];;
         g_v[idx_target].pressed = true;
         g_v[idx_target].age = 0;
         g_v[idx_target].env_state = ENV_STATE_ATTACK;
     }
 } //newpress
 
-void newrelease (uint32_t phase_inc) { //complete
+void newrelease (uint8_t notenum) { //complete
     //search for note with same notenumber, release it
     for (int i=0; i<NUM_VOICES; i++) {
-        if (g_v[i].phase_inc == phase_inc && g_v[i].pressed == true) {
+        if (g_v[i].notenum == notenum && g_v[i].pressed == true) {
             g_v[i].pressed = false;
             g_v[i].env_state = ENV_STATE_RELEASE;
             break;
@@ -121,18 +120,13 @@ void voice_allocation() { //COMPLETE
     MidiByte_t l_MIDInotenumber = l_midinote.number;
     MidiByte_t l_MIDIvelocity = l_midinote.velocity;
     //2. decodes phase increment
-    uint32_t l_freq = g_MIDInote_to_freq [l_MIDInotenumber];
-    uint32_t l_phase_inc = freq_to_phase(l_freq);
     if (l_MIDIstatus == MIDION)  
-        newpress (MIDInotenumber, l_phase_inc);
+        newpress (MIDInotenumber);
     else if (l_MIDIstatus == MIDIOFF)
         newrelease (MIDInotenumber);
     return;
 }
 
-uint32_t freq_to_phase(uint32_t freq) { //incomplete
-
-}
 
 void env_update (Voice_t *v) { //complete
     ///update voice according to FSM
@@ -227,7 +221,7 @@ void format_for_pio(int32_t * arr) { //COMPLETE
 } //format_for_pio
 
 void init_set_priorities(void) { //COMPLETE
-    // TODO: set oscillator/envelope timer IRQ priorities once chosen
+    init_midi_phase_table();
     irq_set_priority(MIDI_IRQ, 0x00); // MIDI is most important
     irq_set_priority(DMA_IRQ,   0x40); //then audio block generation (takes a while)
     irq_set_priority(POT_IRQ,     0xC0); // pot least important
