@@ -1,33 +1,42 @@
 #include "display.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 static uint8_t framebuffer[DISPLAY_HEIGHT][DISPLAY_WIDTH];
 
-void waveform_to_pixels(uint16_t *samples, size_t count, uint8_t y[DISPLAY_WIDTH])
+void waveform_to_pixels(const int16_t *samples, size_t count, uint8_t y[DISPLAY_WIDTH])
 {
     if (samples == NULL || y == NULL || count == 0)
     {
         return;
     }
 
-    for (size_t i = 0; i < DISPLAY_WIDTH; i++)
+    const int32_t center = DISPLAY_HEIGHT / 2;
+    const size_t intervals = DISPLAY_WIDTH - 1;
+    const size_t step = (count - 1) / intervals;
+    const size_t remainder = (count - 1) % intervals;
+
+    for (size_t x = 0; x < DISPLAY_WIDTH; x++)
     {
-        size_t index = i * (count - 1) / (DISPLAY_WIDTH - 1);
+        size_t index = x * step + x * remainder / intervals;
+        int32_t sample = samples[index];
+        int32_t offset = sample >= 0
+            ? sample * center / INT16_MAX
+            : sample * (DISPLAY_HEIGHT - 1 - center) / -(int32_t)INT16_MIN;
 
-        uint32_t height = (uint32_t) samples[index] * (DISPLAY_HEIGHT - 1) / UINT16_MAX;
-
-        y[i] = (DISPLAY_HEIGHT - 1) - height;
+        y[x] = (uint8_t)(center - offset);
     }
+}
+
+const uint8_t (*display_get_framebuffer(void))[DISPLAY_WIDTH]
+{
+    return (const uint8_t (*)[DISPLAY_WIDTH])framebuffer;
 }
 
 void display_clear(void)
 {
-    for (int x = 0; x < DISPLAY_WIDTH; x++)
-    {
-        for (int y = 0; y < DISPLAY_HEIGHT; y++)
-        {
-            framebuffer[y][x] = 0;
-        }
-    }
+    memset(framebuffer, 0, sizeof framebuffer);
 }
 
 void display_set_pixel(int x, int y)
@@ -74,7 +83,7 @@ void display_draw_line(int x0, int y0, int x1, int y1)
     }
 }
 
-void display_draw_waveform(uint16_t *samples, size_t count)
+void display_draw_waveform(const int16_t *samples, size_t count)
 {
     if (samples == NULL || count == 0)
     {
@@ -86,7 +95,7 @@ void display_draw_waveform(uint16_t *samples, size_t count)
 
     display_clear();
 
-    for (int x = 0; x < DISPLAY_WIDTH; x++)
+    for (int x = 0; x + 1 < DISPLAY_WIDTH; x++)
     {
         display_draw_line(x, y[x], x + 1, y[x + 1]);
     }
