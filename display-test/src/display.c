@@ -88,6 +88,6 @@ void display_draw_waveform(uint16_t *samples, size_t count)
 
     for (int x = 0; x < DISPLAY_WIDTH; x++)
     {
-        display_set_pixel(x, y[x]);
+        display_draw_line(x, y[x], x + 1, y[x + 1]);
     }
 }
