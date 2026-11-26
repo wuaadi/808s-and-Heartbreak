@@ -1,0 +1,24 @@
+.program i2s_tx
+.side_set 1
+
+; BCLK is side-set; LRCLK and DOUT are separate SET and OUT pins.
+; Each FIFO word is arranged as one I2S delay bit, 16 sample bits,
+; then 15 zero-padding bits. The C API queues one word per channel.
+
+.wrap_target
+    set x, 31
+    set pins, 0
+
+left_slot:
+    out pins, 1
+    jmp x-- left_slot side 1
+
+    set x, 31
+    set pins, 1
+
+right_slot:
+    out pins, 1
+    jmp x-- right_slot side 1
+
+    set pins, 0
+.wrap

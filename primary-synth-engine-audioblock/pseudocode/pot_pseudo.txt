@@ -1,0 +1,66 @@
+
+//*******************************************************************************
+#define POT_ADC_MAX 4095u
+
+typedef struct {
+    uint8_t a_inc;
+    uint8_t d_inc;
+    uint8_t r_inc;
+    uint32_t s_level;
+} EnvParams_t;
+
+extern volatile EnvParams_t g_env_params;
+
+//***********************************************************************
+//functions list
+
+void pot_to_inc(uint16_t reading) {
+    //decodes potentiometer reading (ADR) to increment value
+    return (uint8_t)(UINT8_MAX - ((uint32_t)reading * (UINT8_MAX - 1u) / POT_ADC_MAX));
+}
+EnvParams_t pot_decode(uint16_t a, uint16_t d, uint16_t s, uint16_t r) {
+    EnvParams_t params;
+    params.a_inc = pot_to_increment(a);
+    params.d_inc = pot_to_increment(d);
+    params.s_level = (uint32_t)s * UINT16_MAX / POT_ADC_MAX;
+    params.r_inc = pot_to_increment(r);
+    return params;
+}
+
+void pot_adc_init(void) {
+    adc_init();
+    adc_gpio_init(MCU0_ATTACK_POT_PIN);
+    adc_gpio_init(MCU0_DECAY_POT_PIN);
+    adc_gpio_init(MCU0_SUSTAIN_POT_PIN);
+    adc_gpio_init(MCU0_RELEASE_POT_PIN);
+
+}
+
+//Initialization functions
+void init_POT() {
+    pot_adc_init();
+    //use timer 0
+
+}
+
+bool debounce_wavetable(void);
+void cycle_wavetable(void);
+void init_button();
+
+
+//***************************************************************************
+//ISR
+
+void ISR_pot () {
+    adc_select_input(MCU0_ATTACK_POT_ADC);
+    uint16_t attack = adc_read();
+    adc_select_input(MCU0_DECAY_POT_ADC);
+    uint16_t decay = adc_read();
+    adc_select_input(MCU0_SUSTAIN_POT_ADC);
+    uint16_t sustain = adc_read();
+    adc_select_input(MCU0_RELEASE_POT_ADC);
+    uint16_t release = adc_read();
+
+    g_env_params = pot_decode(attack, decay, sustain, release);
+}
+

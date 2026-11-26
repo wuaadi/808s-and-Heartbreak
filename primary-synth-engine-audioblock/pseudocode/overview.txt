@@ -1,0 +1,138 @@
+
+AUDIO BUFFER-BASED VERSION
+
+//*****************************
+// ** global volatile variables
+2 local audio buffers, A, B
+1 dma buffer
+    when MCU is loading up A, DMA reads from B; vice versa
+    prevents corruption by only allowing one process to touch a buffer at a env_timer
+
+MIDI note->frequency LUT
+
+Wavetable Mode -> Waevtable Pointer LUT
+
+g_voices[NUM_VOICES] //array of voice structs
+
+MIDI ring buffer
+
+envelope parameters (ADR), index increment values for each ADR, sustain level 0-100
+
+
+// ** flags
+1. new_press[NUM_VOICES] 
+    function: is a struct: contains boolean on flag; velocity; phase increment values
+    set in: main()
+    handled in: envelope update
+2. new_release[NUM_VOICES]
+    function: contains boolean on flag
+    set in: main()
+    handled in: envelope update
+
+// ** state machines
+1. Local Buffer FSM
+    function: alternates between local audio buffers A and B
+    set in: waveform generation
+    handled in: waveform generation
+
+// ** questions
+Do i need two DMA buffers, or can I rely on the audio buffer FSM + 2 audio buffers
+
+//*******************************
+// ** global flash memory tables
+    1. AWFK waveforms (external)
+    2. 4 basic waveforms 
+    3. A, D, R envelope progression tables
+
+//*****************************
+// ** core functions
+1. WAVEFORM GENERATION
+    function: loads in a 64-entry audio buffer in one go
+            calls envelope handling function during run every certain number of samples (e.g. every 4 samples)
+    handled in: ??
+    questions:
+        Should this be a sysclk based interrupt? 
+            if so, I will use 48 KHz (40Khz if memory issues). 
+            This translates to a sysclk divider value of 3,125 (3,750)
+        Since this is paced by I2S, do I rely on DMA to trigger audio block generation?
+
+2. AUDIO OUTPUT
+    function: DMA reads audio buffer and sends it to I2S
+    handled in: DMA
+    questions: 
+3. ENVELOPE HANDLING
+    function: handles envelope
+    handled in: during waveform generation (tentative)
+        handles new_press, new_release flags
+        handle, then set low
+    questions: 
+        will this slow down audio generation too much?
+        is flag-based design a good idea?
+
+4. POTENTIOMETER READINGS
+    function: uses ADC to read in potentiometer values every 0.2 seconds or so
+            runs a scaling function to translate ADR to env table index increment values
+            Sustain potentiometer is translated to a 0-100 sustain value (scales audio output)
+    handled in: uses TIMER0
+    questions: 
+5. VOICE ALLOCATION
+    function: dequeues MIDI ring buffer until it's empty, handled each message independently
+            contains MIDI FSM
+                relevant MIDI messages: note-on, note-off, status messages
+                FSM should handle all other MIDI messages to prevent misalignment or wrong state transitions
+            in the event of a note-on or note-off, decodes status messages
+                decode: MIDI note number->frequency->phase increment (float)
+            raise global new_press/new_release flag
+    handled in: main(); long process
+
+6. MIDI HANDLING
+    function: ISR triggered upon midi; push full MIDI message onto ring buffer
+        contains: note on/off info, status message info
+    handled in: event-triggered ISR
+
+7. WAVETABLE MODE FSM 
+    function:
+        upon button press, increment wavetable mode FSM
+        set wavetable pointer for all voices (independent of envelope stage)
+        use digital debouncing
+    handled by: timer to run slowly (e.g. every 2 ms)
+
+//************************************************
+ISR PRIORITY LEVELS (lower==more important, higher, less)
+1. WAVEFORM GEN/ENV update
+2. MIDI HANDLING
+3. WAVETABLE MODE FSM
+4. POT READINGS
+
+//not included in ISR
+voice allocation runs in main()
+I2S runs in background, handled by DMA independent of CPU
+
+//what's good:
+block generatin + DMA svaes up a lot of CPU overhead
+ping-pong audio buffer standard & good
+voice allocation should stay in main()
+ring buffer between MIDI and ISR
+priorty ordering good
+flash tables
+
+//revisions to make: 
+I2S, not sysclk, is clock master (using sysclk could create drift)
+drive block generation from DMA completion 
+    (Use the DMA channel's completion IRQ (dma_channel_set_irq0_enabled) as the trigger)
+use 48KHz as sample rate if possible
+
+rendering audio block inside ISR could starve other interrupts
+    options:
+        1. set waveform isr priority < midi priority
+        2. run it inside main
+            DMA sets a completion flag, main handles block generation if its high, then moves onto voice allocation
+account for stereo frame I2S standard
+    e.g. duplicate each mono frame
+branching in waveform generation potentially slows things down
+    consider using 1 envelope update per 64-sample block
+Add startup: init both audio buffers to zero before enabling PIO & DMA
+
+for audio waveform generation, do per-voice, per block, instead of per-sample per voice
+    for each voice, generate its portion of the block completly
+    sum and scale at the end once

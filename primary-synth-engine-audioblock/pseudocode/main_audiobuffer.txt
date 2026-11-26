@@ -1,0 +1,80 @@
+//*********************************************************
+//Data structures list for VOICE ALLOCATION
+#define AUDIOBLOCK_SIZE 64
+#define NUM_VOICES 16
+int16_t g_audioblock_A [AUDIOBLOCK_SIZE]
+int16_t g_audioblock_B [AUDIOBLOCK_SIZE]
+
+
+int16_t * g_current_audioblock;
+
+
+
+int16_t g_MIDInote_to_freq [127]
+
+//*********************************************************
+//Function list for VOICE ALLOCATION
+void newpress (notenumber, phase_inc) {
+    //a. if same note is already playing, restart it
+
+    //a. search for unused voice
+
+    //b. if unable, use oldest voice
+}
+
+void newrelease () {
+    //search for note with same notenumber, release it
+}
+
+void voice_allocation() {
+    //handles a single midi message
+    IF buffer empty THEN return
+    //1. dequeues MIDI buffer
+    MIDIstatus, MIDInotenumber, MIDIvelocity = dequeue(MIDI_ring_buffer)
+    //2. decodes phase increment
+    l_freq = MIDInote_to_freq [MIDInotenumber]
+    l_phase_inc = freq_to_phase(l_freq)
+    if (MIDIstatus == MIDION)  
+        newpress (MIDInotenumber, l_phase_inc);
+    else if (MIDIstatus == MIDIOFF)
+        newrelease (MIDInotenumber);
+    return
+}
+
+void env_update (voice) {
+    ///update voice according to FSM
+    //new voice, new release already handled by voice_allocation() in main()
+}
+
+//*******************************************************
+//audio block generation ISR
+void ISR_audioblock (void) {
+    //Triggered by DMA IRQ flag
+    clear DMA IRQ flag
+
+    //swap which buffer DMA reads
+
+    //generates 64-sample audio block on per-voice block basis
+    int16_t *ab = g_current_audioblock
+    for (i < 16)
+    {
+        v = g_v
+        //update envelope
+        update_env(&v)
+        for (i<64) {
+            //do all generation for each sample
+        }
+        //do audio summing & scaling for that sample
+    }
+}
+
+//************************************************************
+//main loop
+int main (void) {
+    init_DMA();
+    init_MIDI():
+    init_AUDIO();
+    init_POTS();
+    for (;;)
+        voice_allocation();
+}

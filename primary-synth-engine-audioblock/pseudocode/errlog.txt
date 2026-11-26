@@ -1,0 +1,222 @@
+PROJECT ERROR LOG
+=================
+Review of primary-synth-engine-audioblock, 2026-11-25.
+This is a static review plus PlatformIO build attempts, not a hardware test.
+The source is unfinished; later build failures may reveal additional issues.
+The large/generated build output was not reviewed as project source.
+
+BUILD AND DECLARATIONS
+----------------------
+1. platformio.ini:9 - include_dir is a project option, not an [env:proton]
+   option. PlatformIO ignores it, and the build cannot find project headers.
+   Put [platformio] on its own and set include_dir = header under it.
+
+2. src/i2s_tx.pio:2 - .side_set 1 is mandatory, but most instructions omit
+   side values. pioasm rejects the program. Specify side values for every
+   instruction, and verify the resulting clock timing (see item 19).
+
+3. header/osc.h is deleted in the current worktree, but src/main.c:11 still
+   includes it. Waveform and envelope table symbols and wavetable mode
+   identifiers are also missing from the current source. The local
+   header/AKWF-FREE/AKWF-c/waveforms directory is empty. Restore or provide
+   the intended declarations, definitions, and waveform assets as needed.
+
+4. header/voices.h:20 - The members of Voice_t use commas instead of
+   semicolons between declarations of different types. This does not compile.
+   EnvState_t is also used before its typedef at line 50.
+
+5. header/midi.h:27 - MidiNote_t is used before its typedef, and
+   MidiFSMState_t is declared as an extern before its typedef. The header
+   should include stdint.h for uint8_t/uint32_t. midi_event_last is defined
+   in the header rather than declared extern, which can create multiple
+   definitions. src/midi.c also needs the headers declaring the MIDI, pot,
+   GPIO, UART, and IRQ types and symbols it uses.
+
+6. header/pot.h:24 and src/midi.c:14 - wavetables has an initializer in
+   both places. An initialized extern declaration is a definition; keep one
+   definition in a C file and only an extern declaration in the header.
+   The table's identifiers and waveform data must also be declared.
+
+7. header/voices.h:42 and src/main.c:19 - Audio buffers have different
+   names and types across files: g_audioblock_* are declared int16_t, while
+   g_block_* are defined uint32_t. audio.c uses g_block_* without matching
+   extern declarations. g_MIDInote_to_freq is declared int16_t but defined
+   uint32_t. render_block takes int16_t * but receives uint32_t * and ignores
+   its argument; format_for_pio takes int32_t * but receives uint32_t *.
+   Define one consistent buffer representation and matching interfaces.
+
+8. src/audio.c:89 - pio and sm are undeclared in this file. The I2S module
+   uses pio0 and state machine 0; the DMA destination and DREQ must match.
+   ISR_audioblock, init_i2s_tx, swap_audioblocks and init_AUDIO also need
+   appropriate shared declarations and includes at their call sites.
+
+9. src/main.c:60 - init_MIDI(): has a colon rather than a semicolon and
+   does not match the defined name init_midi. The init_POT and init_AUDIO
+   calls also need visible prototypes. MIDION and MIDIOFF do not match the
+   MIDI_NOTE_ON and MIDI_NOTE_OFF constants. newpress takes one argument but
+   is called with two; newrelease is given a note number although its
+   implementation expects a phase increment.
+
+10. src/midi.c:38 - report_midi_overflow is declared without a return type
+    and then defined as void; its current body does nothing. Make its
+    declaration and definition match and provide real overflow reporting.
+
+11. src/pot.c:123 versus header/voices.h:42 - g_voices and g_v are different
+    names; only g_v is declared and no definition of either voice array was
+    found. The wavetable table contains const uint16_t pointers, but Voice_t
+    declares int16_t *osc_table. Choose the waveform representation and
+    consistent const-qualified pointer type.
+
+STARTUP, DMA, AND AUDIO
+-----------------------
+12. src/main.c:59 and src/audio.c:102 - Startup never calls init_audioblocks,
+    so g_block_CPU and g_block_I2S remain null before DMA is configured and
+    started. It also never calls init_GPIO, init_set_priorities, or the MIDI
+    phase-table initializer. Establish an explicit startup order before
+    enabling interrupts and DMA.
+
+13. src/audio.c:95 - The DMA interrupt is enabled before the old channel
+    interrupt is acknowledged. Clear stale pending status before enabling
+    the channel/CPU IRQ, and ensure the handler and buffers are ready.
+    Claim/check the chosen DMA channel if other code might use it.
+
+14. src/main.c:190-222 and src/i2s_tx.c:68 - The PIO consumes one 32-bit
+    word per channel slot, but the DMA block contains 64 words and the
+    renderer advances the oscillator once per word. At 40 kHz stereo this
+    is 32 frames, or 0.8 ms of audio, not 64 mono samples or 1.6 ms. The
+    left and right slots receive successive samples rather than copies of
+    one mono sample. To deliver 64 mono frames, pack 128 words, duplicate
+    each sample into both slots, and make buffer sizes and DMA count agree.
+
+15. src/main.c:198-225 - The mix buffer is unsigned even though the summed
+    signal can be negative. format_for_pio loops over NUM_VOICES (16), not
+    AUDIOBLOCK_SIZE (64), references undefined mix, and lacks braces: its
+    later statements are outside the loop and i is out of scope. Signed
+    left-shifting negative samples is undefined. Accumulate in a sufficiently
+    wide signed type, scale/clip deliberately, and pack through an unsigned
+    representation for every output word.
+
+16. src/main.c:191 and src/main.c:133 - freq_to_phase has no implementation.
+    The table called g_MIDInote_to_freq is filled with phase increments,
+    then read as frequency and passed through freq_to_phase again. The
+    initializer omits the 2^24 fractional factor required by a 32-bit
+    accumulator indexed with phase_acc >> 24. A direct increment is roughly
+    round(frequency * 2^32 / sample_rate); decide on one table meaning.
+
+17. src/main.c:24,183 - MIDI has note numbers 0 through 127 (128 values).
+    The table has 127 entries, but the initializer writes 128 and MIDI note
+    127 can be indexed. Allocate 128 entries and initialize before use.
+
+18. src/main.c:40 - DMA is restarted before rendering, which allows the CPU
+    to render the freed buffer while DMA reads the other one. However there
+    is no deadline/underrun detection, and rendering runs inside the DMA
+    ISR while higher-priority MIDI can interrupt it. Measure the worst-case
+    rendering time against the actual 32-frame block deadline and ensure a
+    buffer is ready before DMA reads it.
+
+19. src/i2s_tx.c:25-66 - The C file manually encodes the PIO program; the
+    .pio file is separately compiled and can diverge from it. The PIO
+    sequence has extra setup instructions between bit loops, producing
+    nonuniform BCLK periods around channel boundaries. Check BCLK/LRCLK
+    timing and the I2S one-bit delay with the target receiver and a logic
+    analyzer. pio_add_program_at_offset can return a negative error, but its
+    result is stored in unsigned uint without checking.
+
+20. src/i2s_tx.c:68 - i2s_tx_write_sample writes directly to the same PIO
+    TX FIFO targeted by DMA. Do not use it concurrently with DMA; mixed
+    writers would interleave words and disrupt channel/sample alignment.
+
+VOICE AND ENVELOPE LOGIC
+------------------------
+21. src/main.c:71-100 - Voice selection stops at the first free slot before
+    checking later slots for an already-playing matching note. This can
+    allocate duplicate voices for a repeated note. The loop also stops
+    aging later voices when it breaks. Search for a matching note before
+    choosing a free or oldest voice, and define the desired retrigger rule.
+
+22. src/main.c:96-109,114-131 - Note velocity is read but never stored in
+    the voice, although env_update multiplies by v->velocity. Release
+    compares phase_inc, while the caller passes the MIDI note number.
+    Store a consistent note identity and velocity; use the same identity
+    for allocation and release.
+
+23. src/main.c:140-178 - ENV_STATE_OFF leaves level uninitialized, yet
+    level is used after the switch. Voice_t has no env_base_level member.
+    env_amp_latch is read during release but never set on note-off.
+    Starting/restarting a note also does not reset env_idx or establish its
+    envelope parameters. Define a safe release latch and retrigger behavior.
+
+24. src/pot.c:39 and src/main.c:140 - ADC-derived g_env_params are never
+    copied into the voices, so the controls do not affect a_inc, d_inc,
+    s_level, or r_inc. Also coordinate updates to the multi-field parameter
+    struct and voice state between main code and interrupts.
+
+25. src/main.c:71-109,198-214 and src/pot.c:117 - Main, the audio ISR,
+    and the pot ISR read/write voice fields and oscillator pointers without
+    a synchronization/ownership scheme. An interrupt can observe a partially
+    updated voice or change its waveform mid-block. Use a safe handoff or
+    short critical sections; do not hold interrupts off for an entire render.
+
+MIDI AND TIMERS
+---------------
+26. src/midi.c:58-70 - The ring buffer increments head before writing but
+    dequeues from the current tail. Initially, the first message is written
+    at index 1 while dequeue reads index 0. Publish the data before
+    advancing head, with one consistent empty/full convention. The producer
+    also changes tail on overflow while the consumer changes it, so protect
+    that shared operation or choose a single-producer/single-consumer policy.
+    Silent drops or overwriting note-off messages can leave voices sounding.
+
+27. src/midi.c:41-50 - The ISR reads only one byte and clears only RXIC.
+    RX FIFO threshold and receive-timeout interrupts can both occur. Verify
+    that all queued bytes are serviced and timeout/overrun conditions are
+    handled; a bounded drain or a verified single-byte policy must avoid
+    FIFO overrun while respecting the audio deadline.
+
+28. src/midi.c:107-137 - The basic note FSM correctly preserves its state
+    for real-time bytes and supports running Note On/Off for MIDI_CHANNEL.
+    It intentionally ignores other channels, controllers, and system
+    messages. This means sustain and All Notes Off are unsupported; decide
+    whether that is acceptable for the connected controller. The
+    MIDI_CHANNEL macro is fixed to channel 1, so other channels are ignored.
+
+29. src/pot.c:24 and src/pot.c:70-80 - TIMER0 INTR is write-one-to-clear;
+    hw_clear_bits is not the appropriate acknowledgement. The SDK writes
+    timer0_hw->intr = 1u << alarm_num. The hardware alarm is armed only once
+    and the ISR never schedules the next alarm, so pot and button polling
+    stop after the first interrupt. Rearm each time or use a repeating timer.
+    ALARM_NUM should be an alarm index (0), not an IRQ constant, even though
+    TIMER0_IRQ_0 happens to equal 0 on this target.
+
+30. src/pot.c:104-110 and header/pot.h:11 - POT_PERIOD_US is 50,000 us,
+    so the four-high-sample debounce needs roughly 150-200 ms after a press,
+    not the 2 ms polling suggested in overview.txt. Short button presses may
+    be missed. Set the polling/debounce timing to the intended user behavior.
+
+31. header/pot.h:49-61 - pot_to_inc is declared void but the actual helper
+    is static pot_to_increment returning uint8_t. init_button is declared
+    but has no implementation. Align or remove unused public declarations.
+
+DOCUMENTATION AND VALIDATION
+----------------------------
+32. pseudocode/dma_pio_explained.txt describes old int16_t audio arrays and
+    an old faulty swap, while the current source uses uint32_t arrays and
+    swaps pointers. Its recommendation to rewrite the transfer count at
+    every trigger is unnecessary when the configured count is unchanged:
+    the DMA reloads it on retrigger. Treat historical v2/v3 MIDI drafts and
+    other pseudocode as design notes rather than current implementation.
+
+33. No project test suite or hardware validation was found in the reviewed
+    source. After fixing the build, test MIDI running status/interleaving
+    and queue wrap/overflow, both audio-buffer handoffs, ADC/button timing,
+    waveform packing and channel duplication. Measure ISR deadlines and
+    inspect I2S clocks and data on real hardware.
+
+Build evidence:
+- Normal `pio run -e proton`: failed because include_dir is ignored,
+  project headers are missing from the include path, and pioasm rejects
+  missing side-set values.
+- A second build with a temporary -I header flag still failed, including
+  the missing osc.h, invalid Voice_t declarations, undeclared buffers,
+  missing MIDI/pot types and missing waveform symbols. No source was
+  modified for this diagnostic build.
