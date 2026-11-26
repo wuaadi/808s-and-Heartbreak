@@ -321,6 +321,37 @@ void LCD_Clear(u16 Color)
 }
 
 //===========================================================================
+// Send a full landscape framebuffer, with one byte per black or white pixel.
+//===========================================================================
+void LCD_FlushFramebuffer(const uint8_t pixels[DISPLAY_HEIGHT][DISPLAY_WIDTH])
+{
+    if (lcddev.width != DISPLAY_WIDTH || lcddev.height != DISPLAY_HEIGHT) {
+        return;
+    }
+
+    uint16_t row[DISPLAY_WIDTH];
+    lcddev.select(1);
+    LCD_SetWindow(0, 0, DISPLAY_WIDTH - 1, DISPLAY_HEIGHT - 1);
+    while (spi_is_busy(LCD_SPI)) {
+        tight_loop_contents();
+    }
+    LCD_WriteData16_Prepare();
+
+    for (size_t y = 0; y < DISPLAY_HEIGHT; y++) {
+        for (size_t x = 0; x < DISPLAY_WIDTH; x++) {
+            row[x] = pixels[y][x] ? WHITE : BLACK;
+        }
+        spi_write16_blocking(LCD_SPI, row, DISPLAY_WIDTH);
+    }
+
+    while (spi_is_busy(LCD_SPI)) {
+        tight_loop_contents();
+    }
+    LCD_WriteData16_End();
+    lcddev.select(0);
+}
+
+//===========================================================================
 // Draw a single dot of color c at (x,y)
 //===========================================================================
 static void _LCD_DrawPoint(u16 x, u16 y, u16 c)

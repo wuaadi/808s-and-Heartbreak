@@ -29,7 +29,15 @@ int main(void)
     printf("TFT: %u x %u, SPI0: %u Hz\n",
            (unsigned)lcddev.width, (unsigned)lcddev.height, spi_hz);
 
-    if (lcddev.width == 320 && lcddev.height == 240) {
+    if (lcddev.width == DISPLAY_WIDTH && lcddev.height == DISPLAY_HEIGHT) {
+#ifdef TFT_RAMP_TEST
+        int16_t samples[DISPLAY_WIDTH];
+        for (int32_t x = 0; x < DISPLAY_WIDTH; x++) {
+            samples[x] = INT16_MIN + x * UINT16_MAX / (DISPLAY_WIDTH - 1);
+        }
+        display_draw_waveform(samples, DISPLAY_WIDTH);
+        LCD_FlushFramebuffer(display_get_framebuffer());
+#else
         const u16 right = lcddev.width - 1;
         const u16 bottom = lcddev.height - 1;
         const u16 mark = 11;
@@ -40,6 +48,7 @@ int main(void)
         LCD_DrawFillRectangle(right - mark, 0, right, mark, GREEN);
         LCD_DrawFillRectangle(0, bottom - mark, mark, bottom, CYAN);
         LCD_DrawFillRectangle(right - mark, bottom - mark, right, bottom, YELLOW);
+#endif
     }
 
     for (;;) {

@@ -6,6 +6,7 @@
 #define __LCD_H
 #include <stdlib.h>
 #include <stdint.h>
+#include "display.h"
 
 // shorthand notation for 8-bit and 16-bit unsigned integers
 typedef uint8_t u8;
@@ -78,6 +79,7 @@ extern lcd_dev_t lcddev;
 void LCD_Setup(void);
 void LCD_Init(void (*reset)(int), void (*select)(int), void (*reg_select)(int));
 void LCD_Clear(u16 Color);
+void LCD_FlushFramebuffer(const uint8_t pixels[DISPLAY_HEIGHT][DISPLAY_WIDTH]);
 void LCD_DrawPoint(u16 x,u16 y,u16 c);
 void LCD_DrawLine(u16 x1, u16 y1, u16 x2, u16 y2, u16 c);
 void LCD_DrawRectangle(u16 x1, u16 y1, u16 x2, u16 y2, u16 c);
